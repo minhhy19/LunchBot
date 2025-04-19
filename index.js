@@ -158,6 +158,18 @@ function escapeMarkdown(text) {
               return res.end('ok');
             }
 
+            // Lệnh /resetdata - Xóa toàn bộ dữ liệu (chỉ minhhy_p)
+            if (msg === '/resetdata') {
+              if (username === 'minhhy_p') {
+                db.data = { menu: DEFAULT_MENU, orders: {} };
+                await db.write();
+                await sendMessage(chatId, `🗑️ Đã xóa toàn bộ dữ liệu! Menu được đặt lại về mặc định.`);
+              } else {
+                await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /myorders, /removeorder, /summary, /guide.`);
+              }
+              return res.end('ok');
+            }
+
             // Lệnh /order - Đặt món
             if (msg.startsWith('/order')) {
               const parts = msg.split(' ').slice(1);
