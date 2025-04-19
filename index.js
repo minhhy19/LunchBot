@@ -59,6 +59,12 @@ function escapeMarkdown(text) {
 
     // Tạo server HTTP
     const server = http.createServer(async (req, res) => {
+      if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Bot is alive');
+        console.log(`[${moment().tz(TIME_ZONE).format('DD/MM/YYYY, HH:mm:ss')}] Nhận GET /health`);
+        return;
+      }
       if (req.method === 'POST' && req.url === '/') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -341,7 +347,11 @@ function escapeMarkdown(text) {
     // Thiết lập webhook
     async function setWebhook() {
       try {
-        const webhookUrl = process.env.WEBHOOK_URL || 'YOUR_NGROK_URL';
+        const webhookUrl = process.env.RENDER_EXTERNAL_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+        if (!webhookUrl) {
+          console.warn('Chưa có RENDER_EXTERNAL_URL hoặc RENDER_EXTERNAL_HOSTNAME. Chạy local hoặc thiết lập webhook thủ công.');
+          return;
+        }
         const response = await fetch(`${API}/setWebhook?url=${webhookUrl}`);
         const result = await response.json();
         console.log('Webhook thiết lập:', result);
@@ -350,11 +360,7 @@ function escapeMarkdown(text) {
       }
     }
 
-    if (process.env.WEBHOOK_URL) {
-      await setWebhook();
-    } else {
-      console.warn('Chưa có WEBHOOK_URL trong .env. Chạy ngrok và thiết lập webhook thủ công.');
-    }
+    await setWebhook();
 
   } catch (error) {
     console.error('Lỗi khởi tạo:', error);
