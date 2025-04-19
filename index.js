@@ -14,11 +14,29 @@ const TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 // Danh sách món ăn mặc định (hardcode)
 const DEFAULT_MENU = [
-  'Cơm sườn nướng',
-  'Cơm gà chiên',
-  'Cơm bò xào',
-  'Phở bò',
-  'Bún chả'
+  "Thịt chiên",
+  "Thịt kho chả",
+  "Thịt kho trứng",
+  "Đậu hũ nhồi thịt",
+  "Sườn ram",
+  "Cá diêu Hồng sốt cà",
+  "Vịt kho gừng",
+  "Thịt luộc",
+  "Thịt kho tiêu",
+  "Cá khô dứa",
+  "Đùi gà",
+  "Cánh gà",
+  "Gà sả",
+  "Cá lóc kho",
+  "Thịt rim tôm",
+  "Cá nục chiên",
+  "Đậu hủ nhồi thịt",
+  "Mực xào",
+  "Cá ngừ kho thơm",
+  "Mắm ruốc",
+  "Canh chua cá lóc",
+  "Canh chua cá diêu Hồng",
+  "Canh khổ qua"
 ];
 
 // Khởi tạo lowdb
