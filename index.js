@@ -10,6 +10,7 @@ dotenv.config();
 const TOKEN = process.env.BOT_TOKEN;
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const PORT = process.env.PORT || 3000;
+const ALLOWED_GROUP_ID = process.env.ALLOWED_GROUP_ID;
 const TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 // Danh sách món ăn mặc định (hardcode)
@@ -67,13 +68,26 @@ function escapeMarkdown(text) {
             console.log('Body nhận được:', body);
             const update = JSON.parse(body);
             const msg = update.message?.text?.trim() || '';
-            const chatId = update.message?.chat?.id;
+            const chatId = update.message?.chat?.id?.toString();
             const username = update.message?.from?.username || update.message?.from?.first_name || 'Unknown';
             const today = moment().tz(TIME_ZONE).format('YYYY-MM-DD');
 
             // Log thời gian và tin nhắn
             const now = moment().tz(TIME_ZONE).format('DD/MM/YYYY, HH:mm:ss');
-            console.log(`[${now}] Tin nhắn từ ${username}: "${msg}"`);
+            console.log(`[${now}] Tin nhắn từ ${username} trong chat ${chatId}: "${msg}"`);
+
+            // Lệnh /getchatid - Lấy chat_id của group
+            if (msg === '/getchatid'  && username === 'minhhy_p') {
+              await sendMessage(chatId, `🆔 ID của group này là: \`${chatId}\``);
+              return res.end('ok');
+            }
+
+            // Kiểm tra chat_id
+            if (chatId !== ALLOWED_GROUP_ID) {
+              await sendMessage(chatId, `ℹ️ Bot chỉ hoạt động trong group được phép. Liên hệ admin để biết thêm.`);
+              console.log(`[${now}] Tin nhắn từ chat không được phép: ${chatId}`);
+              return res.end('ok');
+            }
 
             // Lệnh /guide - Hướng dẫn đặt và hủy món
             if (msg === '/guide') {
