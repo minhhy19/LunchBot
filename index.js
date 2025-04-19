@@ -49,6 +49,14 @@ function escapeMarkdown(text) {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
+// Hàm chuẩn hóa chuỗi: loại bỏ dấu, chuyển về chữ thường
+function normalizeString(str) {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 // Khởi tạo server và database
 (async () => {
   try {
@@ -194,7 +202,7 @@ function escapeMarkdown(text) {
             if (msg.startsWith('/order')) {
               const parts = msg.split(' ').slice(1);
               if (parts.length === 0) {
-                await sendMessage(chatId, '❗ Dùng: /order <món ăn> [số lượng] [itcom]');
+                await sendMessage(chatId, '❗ Dùng đúng format: /order <tên món> [số lượng] [itcom]\nVí dụ: /order Thịt chiên 2 itcom');
                 return res.end('ok');
               }
 
@@ -216,15 +224,37 @@ function escapeMarkdown(text) {
               }
 
               // Ghép tên món
-              const dish = dishParts.join(' ').trim();
-              if (!dish) {
-                await sendMessage(chatId, '❗ Vui lòng nhập tên món ăn!');
+              const dishInput = dishParts.join(' ').trim();
+              if (!dishInput) {
+                await sendMessage(chatId, '❗ Vui lòng nhập tên món ăn!\nDùng: /order <tên món> [số lượng] [itcom]');
                 return res.end('ok');
               }
 
-              // Kiểm tra món có trong menu
-              if (!db.data.menu.includes(dish)) {
-                await sendMessage(chatId, `❌ Không có món "${escapeMarkdown(dish)}" trong menu! Dùng /menu để xem danh sách.`);
+              // Kiểm tra format: không được có tham số thừa
+              const expectedParts = lessRice ? (quantity > 1 ? parts.length - 2 : parts.length - 1) : (quantity > 1 ? parts.length - 1 : parts.length);
+              if (dishParts.length !== expectedParts) {
+                await sendMessage(chatId, `❗ Format sai! Dùng: /order <tên món> [số lượng] [itcom]\nVí dụ: /order ${dishInput} ${quantity} ${lessRice ? 'itcom' : ''}`.trim());
+                return res.end('ok');
+              }
+
+              // Kiểm tra số lượng là số nguyên dương
+              if (quantity <= 0) {
+                await sendMessage(chatId, '❗ Số lượng phải là số nguyên dương!\nDùng: /order <tên món> [số lượng] [itcom]');
+                return res.end('ok');
+              }
+
+              // Chuẩn hóa tên món và tìm trong menu
+              const normalizedDishInput = normalizeString(dishInput);
+              let dish = null;
+              for (const menuItem of db.data.menu) {
+                if (normalizeString(menuItem) === normalizedDishInput) {
+                  dish = menuItem; // Giữ nguyên tên món gốc trong menu
+                  break;
+                }
+              }
+
+              if (!dish) {
+                await sendMessage(chatId, `❌ Không có món "${escapeMarkdown(dishInput)}" trong menu! Dùng /menu để xem danh sách.`);
                 return res.end('ok');
               }
 
@@ -259,24 +289,46 @@ function escapeMarkdown(text) {
             // Lệnh /removeorder - Xóa đơn đặt hàng
             if (msg.startsWith('/removeorder')) {
               const parts = msg.split(' ').slice(1);
-              if (parts.length < 1) {
-                await sendMessage(chatId, '❗ Dùng: /removeorder <món>');
+              if (parts.length === 0) {
+                await sendMessage(chatId, '❗ Dùng đúng format: /removeorder <tên món>\nVí dụ: /removeorder Thịt chiên');
                 return res.end('ok');
               }
 
-              const dish = parts.join(' ').trim();
-              if (!dish) {
-                await sendMessage(chatId, '❗ Vui lòng nhập tên món để xóa!');
+              const dishInput = parts.join(' ').trim();
+              if (!dishInput) {
+                await sendMessage(chatId, '❗ Vui lòng nhập tên món để xóa!\nDùng: /removeorder <tên món>');
                 return res.end('ok');
               }
 
+              // Kiểm tra format: không được có tham số thừa
+              if (parts.length !== parts.join(' ').trim().split(' ').length) {
+                await sendMessage(chatId, `❗ Format sai! Dùng: /removeorder <tên món>\nVí dụ: /removeorder ${dishInput}`);
+                return res.end('ok');
+              }
+
+              // Chuẩn hóa tên món
+              const normalizedDishInput = normalizeString(dishInput);
+              let dish = null;
               const todayOrders = db.data.orders[today]?.[username] || [];
+              for (const order of todayOrders) {
+                if (normalizeString(order.dish) === normalizedDishInput) {
+                  dish = order.dish; // Giữ tên món gốc trong đơn
+                  break;
+                }
+              }
+
+              if (!dish) {
+                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dishInput)}" hôm nay!`);
+                return res.end('ok');
+              }
+
+              // Xóa đơn món
               const initialLength = todayOrders.length;
-              db.data.orders[today][username] = todayOrders.filter(order => order.dish !== dish);
+              db.data.orders[today][username] = todayOrders.filter(order => normalizeString(order.dish) !== normalizedDishInput);
               await db.write();
 
               if (db.data.orders[today][username].length === initialLength) {
-                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dish)}" hôm nay!`);
+                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dishInput)}" hôm nay!`);
               } else {
                 await sendMessage(chatId, `✅ Đã xóa đơn "${escapeMarkdown(dish)}" của ${escapeMarkdown(username)}!`);
               }
