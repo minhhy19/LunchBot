@@ -335,25 +335,30 @@ function normalizeString(str) {
               return res.end('ok');
             }
 
-            // Lệnh /summary - Xem tổng hợp đơn đặt hàng trong ngày
+            // Lệnh /summary - Xem tổng hợp đơn đặt hàng trong ngày theo từng người
             if (msg === '/summary') {
               const todayOrders = db.data.orders[today] || {};
-              const dishCounts = {};
-
-              // Tính tổng số lượng mỗi món
-              for (const user in todayOrders) {
-                todayOrders[user].forEach(({ dish, quantity, lessRice }) => {
-                  const key = `${escapeMarkdown(dish)}${lessRice ? ' (ít cơm)' : ''}`;
-                  dishCounts[key] = (dishCounts[key] || 0) + quantity;
-                });
+              if (Object.keys(todayOrders).length === 0) {
+                await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\nChưa có đơn đặt hàng nào hôm nay!`);
+                return res.end('ok');
               }
 
-              const summary = Object.entries(dishCounts).length > 0
-                ? Object.entries(dishCounts)
-                    .map(([dish, count]) => `- ${dish}: ${count} phần`)
-                    .join('\n')
+              const summaryLines = [];
+              for (const user in todayOrders) {
+                const userOrders = todayOrders[user];
+                if (userOrders.length === 0) continue;
+
+                const orderList = userOrders
+                  .map(({ dish, quantity, lessRice }) => 
+                    `- ${escapeMarkdown(dish)}: ${quantity} phần${lessRice ? ' (ít cơm)' : ''}`)
+                  .join('\n');
+                summaryLines.push(`👤 **${escapeMarkdown(user)}**:\n${orderList}`);
+              }
+
+              const summary = summaryLines.length > 0
+                ? summaryLines.join('\n\n')
                 : 'Chưa có đơn đặt hàng nào hôm nay!';
-              await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\n${summary}`);
+              await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\n${summary}\nChưa có thêm đơn đặt hàng nào.`);
               return res.end('ok');
             }
 
