@@ -358,7 +358,7 @@ function normalizeString(str) {
               const summary = summaryLines.length > 0
                 ? summaryLines.join('\n\n')
                 : 'Chưa có đơn đặt hàng nào hôm nay!';
-              await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\n${summary}\nChưa có thêm đơn đặt hàng nào.`);
+              await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\n${summary}`);
               return res.end('ok');
             }
 
