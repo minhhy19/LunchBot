@@ -131,7 +131,7 @@ function normalizeString(str) {
    - Ví dụ: /removeorder Thịt chiên → Xóa tất cả đơn Thịt chiên của bạn hôm nay.
 
 5. **Xem tổng hợp đơn hàng**:
-   - Gõ: /summary
+   - Gõ: /summary hoặc /fullsummary
    - Ví dụ: Xem tất cả món mọi người đã đặt hôm nay.
 
 💡 **Lưu ý**:
@@ -335,8 +335,30 @@ function normalizeString(str) {
               return res.end('ok');
             }
 
-            // Lệnh /summary - Xem tổng hợp đơn đặt hàng trong ngày theo từng người
+            // Lệnh /summary - Xem tổng hợp đơn đặt hàng trong ngày
             if (msg === '/summary') {
+              const todayOrders = db.data.orders[today] || {};
+              const dishCounts = {};
+
+              // Tính tổng số lượng mỗi món
+              for (const user in todayOrders) {
+                todayOrders[user].forEach(({ dish, quantity, lessRice }) => {
+                  const key = `${escapeMarkdown(dish)}${lessRice ? ' (ít cơm)' : ''}`;
+                  dishCounts[key] = (dishCounts[key] || 0) + quantity;
+                });
+              }
+
+              const summary = Object.entries(dishCounts).length > 0
+                ? Object.entries(dishCounts)
+                    .map(([dish, count]) => `- ${dish}: ${count} phần`)
+                    .join('\n')
+                : 'Chưa có đơn đặt hàng nào hôm nay!';
+              await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\n${summary}`);
+              return res.end('ok');
+            }
+
+            // Lệnh /fullsummary - Xem tổng hợp đơn đặt hàng trong ngày theo từng người
+            if (msg === '/fullsummary') {
               const todayOrders = db.data.orders[today] || {};
               if (Object.keys(todayOrders).length === 0) {
                 await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\nChưa có đơn đặt hàng nào hôm nay!`);
