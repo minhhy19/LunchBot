@@ -10,6 +10,7 @@
         "lodash": "^4.17.21",
         "lowdb": "^7.0.0",
         "moment-timezone": "^0.5.48",
+        "mongoose": "^8.0.0",
         "node-fetch": "^3.0.0"
     },
     "type": "module"

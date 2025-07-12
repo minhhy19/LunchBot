@@ -1,9 +1,9 @@
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 import http from 'http';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
 import moment from 'moment-timezone';
+import { connectDB } from './config/database.js';
+import { Order } from './models/index.js';
 
 dotenv.config();
 
@@ -13,10 +13,10 @@ const PORT = process.env.PORT || 3000;
 const ALLOWED_GROUP_ID = process.env.ALLOWED_GROUP_ID;
 const TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
-// Danh sách món ăn mặc định (hardcode)
-const DEFAULT_MENU = [
+// Menu cho thứ 2, 4, 6 (Monday, Wednesday, Friday)
+const MENU_246 = [
   "Thịt chiên",
-  "Thịt kho chả",
+  "Chả cá rim nước mắm",
   "Thịt kho trứng",
   "Đậu hũ nhồi thịt",
   "Sườn ram",
@@ -40,16 +40,45 @@ const DEFAULT_MENU = [
   "Canh khổ qua"
 ];
 
-// Khởi tạo lowdb
-const adapter = new JSONFile('db.json');
-const db = new Low(adapter, { menu: DEFAULT_MENU, orders: {} });
+// Menu cho thứ 3, 5, 7 (Tuesday, Thursday, Saturday)
+const MENU_357 = [
+  "Thịt chiên",
+  "Chả cá rim nước mắm",
+  "Thịt kho trứng",
+  "Đậu hũ nhồi thịt",
+  "Sườn ram",
+  "Cá diêu Hồng sốt cà",
+  "Vịt kho gừng",
+  "Thịt luộc",
+  "Cá khô dứa",
+  "Đùi gà",
+  "Cánh gà",
+  "Gà sả",
+  "Cá lóc kho",
+  "Cá nục chiên",
+  "Đậu hủ nhồi thịt",
+  "Mực xào",
+  "Cá ngừ kho thơm",
+  "Mắm ruốc",
+  "Canh chua cá lóc",
+  "Canh chua cá diêu Hồng",
+  "Canh khổ qua"
+];
 
-// Hàm escape ký tự Markdown
+/**
+ * Hàm escape ký tự Markdown
+ * @param {string} text - Văn bản cần escape
+ * @returns {string} - Văn bản đã escape
+ */
 function escapeMarkdown(text) {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
-// Hàm chuẩn hóa chuỗi: loại bỏ dấu, chuyển về chữ thường
+/**
+ * Hàm chuẩn hóa chuỗi: loại bỏ dấu, chuyển về chữ thường
+ * @param {string} str - Chuỗi cần chuẩn hóa
+ * @returns {string} - Chuỗi đã chuẩn hóa
+ */
 function normalizeString(str) {
   return str
     .toLowerCase()
@@ -57,13 +86,180 @@ function normalizeString(str) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/**
+ * Lấy menu phù hợp dựa trên ngày trong tuần
+ * @param {string} date - Ngày (YYYY-MM-DD)
+ * @returns {Array|null} - Menu array hoặc null nếu không có menu
+ */
+function getMenuByDate(date) {
+  const dayOfWeek = moment(date).day(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+  
+  // Thứ 2, 4, 6 (Monday, Wednesday, Friday) = Menu 246
+  if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+    return MENU_246;
+  }
+  // Thứ 3, 5, 7 (Tuesday, Thursday, Saturday) = Menu 357
+  if (dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 6) {
+    return MENU_357;
+  }
+  // Chủ nhật = không có menu
+  return null;
+}
+
+
+/**
+ * Tìm món ăn trong menu theo tên (có chuẩn hóa)
+ * @param {string} dishInput - Tên món ăn nhập vào
+ * @param {Array} menu - Menu array để tìm
+ * @returns {string|null} - Tên món ăn chính xác hoặc null
+ */
+function findDishInMenu(dishInput, menu) {
+  if (!menu) return null;
+  
+  const normalizedInput = normalizeString(dishInput);
+  
+  for (const item of menu) {
+    if (normalizeString(item) === normalizedInput) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/**
+ * Thêm đơn đặt hàng
+ * @param {string} date - Ngày đặt (YYYY-MM-DD)
+ * @param {string} username - Tên người đặt
+ * @param {string} dish - Tên món ăn
+ * @param {number} quantity - Số lượng
+ * @param {boolean} lessRice - Có ít cơm không
+ * @returns {Promise<boolean>} - True nếu thành công
+ */
+async function addOrder(date, username, dish, quantity, lessRice) {
+  try {
+    const newOrder = new Order({
+      date,
+      username,
+      dish,
+      quantity,
+      lessRice
+    });
+    await newOrder.save();
+    return true;
+  } catch (error) {
+    console.error('Lỗi thêm đơn đặt hàng:', error);
+    return false;
+  }
+}
+
+/**
+ * Lấy danh sách đơn đặt hàng của một user trong ngày
+ * @param {string} date - Ngày (YYYY-MM-DD)
+ * @param {string} username - Tên người đặt
+ * @returns {Promise<Array>} - Danh sách đơn đặt hàng
+ */
+async function getUserOrders(date, username) {
+  try {
+    const orders = await Order.find({ date, username }).sort({ createdAt: 1 });
+    return orders.map(order => ({
+      dish: order.dish,
+      quantity: order.quantity,
+      lessRice: order.lessRice
+    }));
+  } catch (error) {
+    console.error('Lỗi lấy đơn đặt hàng của user:', error);
+    return [];
+  }
+}
+
+/**
+ * Xóa đơn đặt hàng theo món ăn
+ * @param {string} date - Ngày (YYYY-MM-DD)
+ * @param {string} username - Tên người đặt
+ * @param {string} dish - Tên món ăn
+ * @returns {Promise<boolean>} - True nếu thành công
+ */
+async function removeUserOrder(date, username, dish) {
+  try {
+    const result = await Order.deleteMany({ date, username, dish });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Lỗi xóa đơn đặt hàng:', error);
+    return false;
+  }
+}
+
+/**
+ * Lấy tổng hợp đơn đặt hàng trong ngày
+ * @param {string} date - Ngày (YYYY-MM-DD)
+ * @returns {Promise<Object>} - Tổng hợp đơn đặt hàng
+ */
+async function getDaySummary(date) {
+  try {
+    const orders = await Order.find({ date });
+    const dishCounts = {};
+    
+    orders.forEach(order => {
+      const key = `${order.dish}${order.lessRice ? ' (ít cơm)' : ''}`;
+      dishCounts[key] = (dishCounts[key] || 0) + order.quantity;
+    });
+    
+    return dishCounts;
+  } catch (error) {
+    console.error('Lỗi lấy tổng hợp đơn đặt hàng:', error);
+    return {};
+  }
+}
+
+/**
+ * Lấy tổng hợp đơn đặt hàng trong ngày theo từng người
+ * @param {string} date - Ngày (YYYY-MM-DD)
+ * @returns {Promise<Object>} - Tổng hợp đơn đặt hàng theo người
+ */
+async function getDayFullSummary(date) {
+  try {
+    const orders = await Order.find({ date }).sort({ username: 1, createdAt: 1 });
+    const userOrders = {};
+    
+    orders.forEach(order => {
+      if (!userOrders[order.username]) {
+        userOrders[order.username] = [];
+      }
+      userOrders[order.username].push({
+        dish: order.dish,
+        quantity: order.quantity,
+        lessRice: order.lessRice
+      });
+    });
+    
+    return userOrders;
+  } catch (error) {
+    console.error('Lỗi lấy tổng hợp đơn đặt hàng đầy đủ:', error);
+    return {};
+  }
+}
+
+/**
+ * Xóa toàn bộ dữ liệu đơn đặt hàng
+ * @returns {Promise<boolean>} - True nếu thành công
+ */
+async function resetAllData() {
+  try {
+    // Xóa toàn bộ orders
+    await Order.deleteMany({});
+    
+    return true;
+  } catch (error) {
+    console.error('Lỗi reset dữ liệu:', error);
+    return false;
+  }
+}
+
 // Khởi tạo server và database
 (async () => {
   try {
-    // Đọc hoặc khởi tạo database
-    await db.read();
-    db.data = db.data || { menu: DEFAULT_MENU, orders: {} };
-    await db.write();
+    // Kết nối MongoDB
+    await connectDB();
 
     // Tạo server HTTP
     const server = http.createServer(async (req, res) => {
@@ -85,6 +281,7 @@ function normalizeString(str) {
             const chatId = update.message?.chat?.id?.toString();
             const username = update.message?.from?.username || update.message?.from?.first_name || 'Unknown';
             const today = moment().tz(TIME_ZONE).format('YYYY-MM-DD');
+            const todayMenu = getMenuByDate(today);
 
             // Log thời gian và tin nhắn
             const now = moment().tz(TIME_ZONE).format('DD/MM/YYYY, HH:mm:ss');
@@ -144,54 +341,28 @@ function normalizeString(str) {
 
             // Lệnh /menu - Xem danh sách món ăn
             if (msg === '/menu') {
-              const menuList = db.data.menu.length > 0 
-                ? db.data.menu.map((item, index) => `${index + 1}. ${escapeMarkdown(item)}`).join('\n')
-                : 'Chưa có món ăn nào trong menu!';
-              await sendMessage(chatId, `📋 **Danh sách món ăn**:\n${menuList}`);
-              return res.end('ok');
-            }
-
-            // Lệnh /editmenu - Chỉnh sửa danh sách món ăn (chỉ minhhy_p)
-            if (msg.startsWith('/editmenu')) {
-              if (username === 'minhhy_p') {
-                const parts = msg.split(' ').slice(1);
-                if (parts.length < 2 || !['add', 'remove'].includes(parts[0])) {
-                  await sendMessage(chatId, '❗ Dùng: /editmenu add <món> hoặc /editmenu remove <món>');
-                  return res.end('ok');
-                }
-
-                const action = parts[0];
-                const dish = parts.slice(1).join(' ').trim();
-
-                if (action === 'add') {
-                  if (db.data.menu.includes(dish)) {
-                    await sendMessage(chatId, `⚠️ Món "${escapeMarkdown(dish)}" đã có trong menu!`);
-                  } else {
-                    db.data.menu.push(dish);
-                    await db.write();
-                    await sendMessage(chatId, `✅ Đã thêm "${escapeMarkdown(dish)}" vào menu!`);
-                  }
-                } else if (action === 'remove') {
-                  if (!db.data.menu.includes(dish)) {
-                    await sendMessage(chatId, `⚠️ Món "${escapeMarkdown(dish)}" không có trong menu!`);
-                  } else {
-                    db.data.menu = db.data.menu.filter(item => item !== dish);
-                    await db.write();
-                    await sendMessage(chatId, `✅ Đã xóa "${escapeMarkdown(dish)}" khỏi menu!`);
-                  }
-                }
-              } else {
-                await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /myorders, /removeorder, /summary, /guide.`);
+              if (!todayMenu) {
+                await sendMessage(chatId, `📋 **Hôm nay là Chủ nhật**\n\n🚫 Không có menu đặt cơm hôm nay!\n\n📅 Menu sẽ có vào:\n- **Menu 246**: Thứ 2, 4, 6\n- **Menu 357**: Thứ 3, 5, 7`);
+                return res.end('ok');
               }
+              
+              const formattedMenu = todayMenu.length > 0 
+                ? todayMenu.map((item, index) => `${index + 1}. ${escapeMarkdown(item)}`).join('\n')
+                : 'Chưa có món ăn nào trong menu!';
+              
+              await sendMessage(chatId, `📋 **Menu hôm nay**:\n${formattedMenu}`);
               return res.end('ok');
             }
 
-            // Lệnh /resetdata - Xóa toàn bộ dữ liệu (chỉ minhhy_p)
+            // Lệnh /resetdata - Xóa toàn bộ dữ liệu đơn đặt hàng (chỉ minhhy_p)
             if (msg === '/resetdata') {
               if (username === 'minhhy_p') {
-                db.data = { menu: DEFAULT_MENU, orders: {} };
-                await db.write();
-                await sendMessage(chatId, `🗑️ Đã xóa toàn bộ dữ liệu! Menu được đặt lại về mặc định.`);
+                const success = await resetAllData();
+                if (success) {
+                  await sendMessage(chatId, `🗑️ Đã xóa toàn bộ dữ liệu đơn đặt hàng!`);
+                } else {
+                  await sendMessage(chatId, `❌ Lỗi khi reset dữ liệu!`);
+                }
               } else {
                 await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /myorders, /removeorder, /summary, /guide.`);
               }
@@ -200,6 +371,11 @@ function normalizeString(str) {
 
             // Lệnh /order - Đặt món
             if (msg.startsWith('/order')) {
+              if (!todayMenu) {
+                await sendMessage(chatId, `🚫 **Hôm nay là Chủ nhật**\n\nKhông thể đặt cơm hôm nay! Menu sẽ có vào thứ 2-7.`);
+                return res.end('ok');
+              }
+              
               const parts = msg.split(' ').slice(1);
               if (parts.length === 0) {
                 await sendMessage(chatId, '❗ Dùng đúng format: /order <tên món> [số lượng] [itcom]\nVí dụ: /order Thịt chiên 2 itcom');
@@ -243,35 +419,27 @@ function normalizeString(str) {
                 return res.end('ok');
               }
 
-              // Chuẩn hóa tên món và tìm trong menu
-              const normalizedDishInput = normalizeString(dishInput);
-              let dish = null;
-              for (const menuItem of db.data.menu) {
-                if (normalizeString(menuItem) === normalizedDishInput) {
-                  dish = menuItem; // Giữ nguyên tên món gốc trong menu
-                  break;
-                }
-              }
-
+              // Tìm món trong menu
+              const dish = findDishInMenu(dishInput, todayMenu);
               if (!dish) {
                 await sendMessage(chatId, `❌ Không có món "${escapeMarkdown(dishInput)}" trong menu! Dùng /menu để xem danh sách.`);
                 return res.end('ok');
               }
 
               // Lưu đơn đặt hàng
-              db.data.orders[today] = db.data.orders[today] || {};
-              db.data.orders[today][username] = db.data.orders[today][username] || [];
-              db.data.orders[today][username].push({ dish, quantity, lessRice });
-              await db.write();
-
-              const riceNote = lessRice ? ' (ít cơm)' : '';
-              await sendMessage(chatId, `🍽️ Đã đặt ${quantity} phần "${escapeMarkdown(dish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
+              const success = await addOrder(today, username, dish, quantity, lessRice);
+              if (success) {
+                const riceNote = lessRice ? ' (ít cơm)' : '';
+                await sendMessage(chatId, `🍽️ Đã đặt ${quantity} phần "${escapeMarkdown(dish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
+              } else {
+                await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
+              }
               return res.end('ok');
             }
 
             // Lệnh /myorders - Xem đơn đặt hàng của username
             if (msg === '/myorders') {
-              const todayOrders = db.data.orders[today]?.[username] || [];
+              const todayOrders = await getUserOrders(today, username);
               if (todayOrders.length === 0) {
                 await sendMessage(chatId, `📜 Bạn chưa đặt món nào hôm nay (${today})!`);
                 return res.end('ok');
@@ -306,48 +474,26 @@ function normalizeString(str) {
                 return res.end('ok');
               }
 
-              // Chuẩn hóa tên món
-              const normalizedDishInput = normalizeString(dishInput);
-              let dish = null;
-              const todayOrders = db.data.orders[today]?.[username] || [];
-              for (const order of todayOrders) {
-                if (normalizeString(order.dish) === normalizedDishInput) {
-                  dish = order.dish; // Giữ tên món gốc trong đơn
-                  break;
-                }
-              }
-
+              // Tìm món trong menu hiện tại
+              const dish = findDishInMenu(dishInput, todayMenu);
               if (!dish) {
-                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dishInput)}" hôm nay!`);
+                await sendMessage(chatId, `⚠️ Không có món "${escapeMarkdown(dishInput)}" trong menu hoặc hôm nay không có menu!`);
                 return res.end('ok');
               }
 
               // Xóa đơn món
-              const initialLength = todayOrders.length;
-              db.data.orders[today][username] = todayOrders.filter(order => normalizeString(order.dish) !== normalizedDishInput);
-              await db.write();
-
-              if (db.data.orders[today][username].length === initialLength) {
-                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dishInput)}" hôm nay!`);
-              } else {
+              const success = await removeUserOrder(today, username, dish);
+              if (success) {
                 await sendMessage(chatId, `✅ Đã xóa đơn "${escapeMarkdown(dish)}" của ${escapeMarkdown(username)}!`);
+              } else {
+                await sendMessage(chatId, `⚠️ Bạn chưa đặt món "${escapeMarkdown(dishInput)}" hôm nay!`);
               }
               return res.end('ok');
             }
 
             // Lệnh /summary - Xem tổng hợp đơn đặt hàng trong ngày
             if (msg === '/summary') {
-              const todayOrders = db.data.orders[today] || {};
-              const dishCounts = {};
-
-              // Tính tổng số lượng mỗi món
-              for (const user in todayOrders) {
-                todayOrders[user].forEach(({ dish, quantity, lessRice }) => {
-                  const key = `${escapeMarkdown(dish)}${lessRice ? ' (ít cơm)' : ''}`;
-                  dishCounts[key] = (dishCounts[key] || 0) + quantity;
-                });
-              }
-
+              const dishCounts = await getDaySummary(today);
               const summary = Object.entries(dishCounts).length > 0
                 ? Object.entries(dishCounts)
                     .map(([dish, count]) => `- ${dish}: ${count} phần`)
@@ -359,7 +505,7 @@ function normalizeString(str) {
 
             // Lệnh /fullsummary - Xem tổng hợp đơn đặt hàng trong ngày theo từng người
             if (msg === '/fullsummary') {
-              const todayOrders = db.data.orders[today] || {};
+              const todayOrders = await getDayFullSummary(today);
               if (Object.keys(todayOrders).length === 0) {
                 await sendMessage(chatId, `📊 **Tổng hợp đơn đặt hàng hôm nay (${today})**:\nChưa có đơn đặt hàng nào hôm nay!`);
                 return res.end('ok');
@@ -401,7 +547,12 @@ function normalizeString(str) {
     // Khởi động server
     server.listen(PORT, () => console.log(`Bot đang chạy trên cổng ${PORT}`));
 
-    // Hàm gửi tin nhắn
+    /**
+     * Hàm gửi tin nhắn
+     * @param {string} chatId - ID của chat
+     * @param {string} text - Nội dung tin nhắn
+     * @returns {Promise<Object>} - Kết quả gửi tin nhắn
+     */
     async function sendMessage(chatId, text) {
       try {
         console.log(`Chuẩn bị gửi tin nhắn tới ${chatId}: ${text}`);
@@ -423,7 +574,10 @@ function normalizeString(str) {
       }
     }
 
-    // Thiết lập webhook
+    /**
+     * Thiết lập webhook
+     * @returns {Promise<void>}
+     */
     async function setWebhook() {
       try {
         const webhookUrl = process.env.RENDER_EXTERNAL_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
