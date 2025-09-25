@@ -38,7 +38,8 @@ const MENU_246 = [
   "Mắm ruốc",
   "Canh chua cá lóc",
   "Canh chua cá diêu Hồng",
-  "Canh khổ qua"
+  "Canh khổ qua",
+  "Cơm trắng"
 ];
 
 // Menu cho thứ 3, 5, 7 (Tuesday, Thursday, Saturday)
@@ -64,7 +65,8 @@ const MENU_357 = [
   "Mắm ruốc",
   "Canh chua cá lóc",
   "Canh chua cá diêu Hồng",
-  "Canh khổ qua"
+  "Canh khổ qua",
+  "Cơm trắng"
 ];
 
 /**
