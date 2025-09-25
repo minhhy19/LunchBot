@@ -392,6 +392,69 @@ async function resetAllData() {
               return res.end('ok');
             }
 
+            // Lệnh /orderrandom - Đặt món ngẫu nhiên
+            if (msg.startsWith('/orderrandom')) {
+              if (!todayMenu) {
+                await sendMessage(chatId, `🚫 **Hôm nay là Chủ nhật**\n\nKhông thể đặt cơm hôm nay! Menu sẽ có vào thứ 2-7.`);
+                return res.end('ok');
+              }
+              
+              const parts = msg.split(' ').slice(1);
+              
+              // Xử lý số lượng và ít cơm
+              let quantity = 1;
+              let lessRice = false;
+              let validFormat = true;
+
+              // Kiểm tra itcom
+              if (parts.includes('itcom')) {
+                lessRice = true;
+                const nonItcomParts = parts.filter(p => p !== 'itcom');
+                
+                // Kiểm tra số lượng
+                if (nonItcomParts.length === 1 && /^\d+$/.test(nonItcomParts[0])) {
+                  quantity = parseInt(nonItcomParts[0], 10);
+                } else if (nonItcomParts.length > 1) {
+                  validFormat = false;
+                }
+              } else {
+                // Kiểm tra số lượng (không có itcom)
+                if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+                  quantity = parseInt(parts[0], 10);
+                } else if (parts.length > 1) {
+                  validFormat = false;
+                }
+              }
+
+              if (!validFormat) {
+                await sendMessage(chatId, '❗ Dùng đúng format: /orderrandom [số lượng] [itcom]\nVí dụ: /orderrandom, /orderrandom 2, /orderrandom itcom, /orderrandom 2 itcom');
+                return res.end('ok');
+              }
+
+              // Kiểm tra số lượng là số nguyên dương
+              if (quantity <= 0) {
+                await sendMessage(chatId, '❗ Số lượng phải là số nguyên dương!\nDùng: /orderrandom [số lượng] [itcom]');
+                return res.end('ok');
+              }
+
+              // Chọn món ngẫu nhiên
+              const randomDish = getRandomDish(todayMenu);
+              if (!randomDish) {
+                await sendMessage(chatId, `❌ Không thể chọn món ngẫu nhiên từ menu hôm nay!`);
+                return res.end('ok');
+              }
+
+              // Lưu đơn đặt hàng
+              const success = await addOrder(today, username, randomDish, quantity, lessRice);
+              if (success) {
+                const riceNote = lessRice ? ' (ít cơm)' : '';
+                await sendMessage(chatId, `🎲 Đã đặt ngẫu nhiên ${quantity} phần "${escapeMarkdown(randomDish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
+              } else {
+                await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
+              }
+              return res.end('ok');
+            }
+
             // Lệnh /order - Đặt món
             if (msg.startsWith('/order')) {
               if (!todayMenu) {
@@ -454,69 +517,6 @@ async function resetAllData() {
               if (success) {
                 const riceNote = lessRice ? ' (ít cơm)' : '';
                 await sendMessage(chatId, `🍽️ Đã đặt ${quantity} phần "${escapeMarkdown(dish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
-              } else {
-                await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
-              }
-              return res.end('ok');
-            }
-
-            // Lệnh /orderrandom - Đặt món ngẫu nhiên
-            if (msg.startsWith('/orderrandom')) {
-              if (!todayMenu) {
-                await sendMessage(chatId, `🚫 **Hôm nay là Chủ nhật**\n\nKhông thể đặt cơm hôm nay! Menu sẽ có vào thứ 2-7.`);
-                return res.end('ok');
-              }
-              
-              const parts = msg.split(' ').slice(1);
-              
-              // Xử lý số lượng và ít cơm
-              let quantity = 1;
-              let lessRice = false;
-              let validFormat = true;
-
-              // Kiểm tra itcom
-              if (parts.includes('itcom')) {
-                lessRice = true;
-                const nonItcomParts = parts.filter(p => p !== 'itcom');
-                
-                // Kiểm tra số lượng
-                if (nonItcomParts.length === 1 && /^\d+$/.test(nonItcomParts[0])) {
-                  quantity = parseInt(nonItcomParts[0], 10);
-                } else if (nonItcomParts.length > 1) {
-                  validFormat = false;
-                }
-              } else {
-                // Kiểm tra số lượng (không có itcom)
-                if (parts.length === 1 && /^\d+$/.test(parts[0])) {
-                  quantity = parseInt(parts[0], 10);
-                } else if (parts.length > 1) {
-                  validFormat = false;
-                }
-              }
-
-              if (!validFormat) {
-                await sendMessage(chatId, '❗ Dùng đúng format: /orderrandom [số lượng] [itcom]\nVí dụ: /orderrandom, /orderrandom 2, /orderrandom itcom, /orderrandom 2 itcom');
-                return res.end('ok');
-              }
-
-              // Kiểm tra số lượng là số nguyên dương
-              if (quantity <= 0) {
-                await sendMessage(chatId, '❗ Số lượng phải là số nguyên dương!\nDùng: /orderrandom [số lượng] [itcom]');
-                return res.end('ok');
-              }
-
-              // Chọn món ngẫu nhiên
-              const randomDish = getRandomDish(todayMenu);
-              if (!randomDish) {
-                await sendMessage(chatId, `❌ Không thể chọn món ngẫu nhiên từ menu hôm nay!`);
-                return res.end('ok');
-              }
-
-              // Lưu đơn đặt hàng
-              const success = await addOrder(today, username, randomDish, quantity, lessRice);
-              if (success) {
-                const riceNote = lessRice ? ' (ít cơm)' : '';
-                await sendMessage(chatId, `🎲 Đã đặt ngẫu nhiên ${quantity} phần "${escapeMarkdown(randomDish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
               } else {
                 await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
               }
