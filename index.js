@@ -23,6 +23,7 @@ const MENU_246 = [
   "Cá diêu Hồng sốt cà",
   "Vịt kho gừng",
   "Thịt luộc",
+  "Thịt luộc nước mắm",
   "Thịt kho tiêu",
   "Cá khô dứa",
   "Đùi gà",
@@ -50,6 +51,7 @@ const MENU_357 = [
   "Cá diêu Hồng sốt cà",
   "Vịt kho gừng",
   "Thịt luộc",
+  "Thịt luộc nước mắm",
   "Cá khô dứa",
   "Đùi gà",
   "Cánh gà",
@@ -124,6 +126,18 @@ function findDishInMenu(dishInput, menu) {
     }
   }
   return null;
+}
+
+/**
+ * Chọn món ăn ngẫu nhiên từ menu
+ * @param {Array} menu - Menu array để chọn
+ * @returns {string|null} - Tên món ăn ngẫu nhiên hoặc null nếu menu trống
+ */
+function getRandomDish(menu) {
+  if (!menu || menu.length === 0) return null;
+  
+  const randomIndex = Math.floor(Math.random() * menu.length);
+  return menu[randomIndex];
 }
 
 /**
@@ -319,15 +333,24 @@ async function resetAllData() {
      - /order Thịt kho chả 2 → Đặt 2 phần Thịt kho chả.
      - /order Thịt chiên 1 itcom → Đặt 1 phần ít cơm.
 
-3. **Xem đơn đã đặt**:
+3. **Đặt món ngẫu nhiên**:
+   - Gõ: /orderrandom [số lượng] [itcom]
+   - Bot sẽ tự động chọn một món ngẫu nhiên từ menu hôm nay.
+   - Ví dụ:
+     - /orderrandom → Đặt 1 phần món ngẫu nhiên.
+     - /orderrandom 2 → Đặt 2 phần món ngẫu nhiên.
+     - /orderrandom itcom → Đặt 1 phần món ngẫu nhiên ít cơm.
+     - /orderrandom 2 itcom → Đặt 2 phần món ngẫu nhiên ít cơm.
+
+4. **Xem đơn đã đặt**:
    - Gõ: /myorders
    - Ví dụ: Xem bạn đã đặt 2 phần Thịt chiên (ít cơm) hôm nay.
 
-4. **Hủy món**:
+5. **Hủy món**:
    - Gõ: /removeorder <tên món>
    - Ví dụ: /removeorder Thịt chiên → Xóa tất cả đơn Thịt chiên của bạn hôm nay.
 
-5. **Xem tổng hợp đơn hàng**:
+6. **Xem tổng hợp đơn hàng**:
    - Gõ: /summary hoặc /fullsummary
    - Ví dụ: Xem tất cả món mọi người đã đặt hôm nay.
 
@@ -364,7 +387,7 @@ async function resetAllData() {
                   await sendMessage(chatId, `❌ Lỗi khi reset dữ liệu!`);
                 }
               } else {
-                await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /myorders, /removeorder, /summary, /guide.`);
+                await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /orderrandom, /myorders, /removeorder, /summary, /guide.`);
               }
               return res.end('ok');
             }
@@ -431,6 +454,69 @@ async function resetAllData() {
               if (success) {
                 const riceNote = lessRice ? ' (ít cơm)' : '';
                 await sendMessage(chatId, `🍽️ Đã đặt ${quantity} phần "${escapeMarkdown(dish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
+              } else {
+                await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
+              }
+              return res.end('ok');
+            }
+
+            // Lệnh /orderrandom - Đặt món ngẫu nhiên
+            if (msg.startsWith('/orderrandom')) {
+              if (!todayMenu) {
+                await sendMessage(chatId, `🚫 **Hôm nay là Chủ nhật**\n\nKhông thể đặt cơm hôm nay! Menu sẽ có vào thứ 2-7.`);
+                return res.end('ok');
+              }
+              
+              const parts = msg.split(' ').slice(1);
+              
+              // Xử lý số lượng và ít cơm
+              let quantity = 1;
+              let lessRice = false;
+              let validFormat = true;
+
+              // Kiểm tra itcom
+              if (parts.includes('itcom')) {
+                lessRice = true;
+                const nonItcomParts = parts.filter(p => p !== 'itcom');
+                
+                // Kiểm tra số lượng
+                if (nonItcomParts.length === 1 && /^\d+$/.test(nonItcomParts[0])) {
+                  quantity = parseInt(nonItcomParts[0], 10);
+                } else if (nonItcomParts.length > 1) {
+                  validFormat = false;
+                }
+              } else {
+                // Kiểm tra số lượng (không có itcom)
+                if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+                  quantity = parseInt(parts[0], 10);
+                } else if (parts.length > 1) {
+                  validFormat = false;
+                }
+              }
+
+              if (!validFormat) {
+                await sendMessage(chatId, '❗ Dùng đúng format: /orderrandom [số lượng] [itcom]\nVí dụ: /orderrandom, /orderrandom 2, /orderrandom itcom, /orderrandom 2 itcom');
+                return res.end('ok');
+              }
+
+              // Kiểm tra số lượng là số nguyên dương
+              if (quantity <= 0) {
+                await sendMessage(chatId, '❗ Số lượng phải là số nguyên dương!\nDùng: /orderrandom [số lượng] [itcom]');
+                return res.end('ok');
+              }
+
+              // Chọn món ngẫu nhiên
+              const randomDish = getRandomDish(todayMenu);
+              if (!randomDish) {
+                await sendMessage(chatId, `❌ Không thể chọn món ngẫu nhiên từ menu hôm nay!`);
+                return res.end('ok');
+              }
+
+              // Lưu đơn đặt hàng
+              const success = await addOrder(today, username, randomDish, quantity, lessRice);
+              if (success) {
+                const riceNote = lessRice ? ' (ít cơm)' : '';
+                await sendMessage(chatId, `🎲 Đã đặt ngẫu nhiên ${quantity} phần "${escapeMarkdown(randomDish)}"${riceNote} cho ${escapeMarkdown(username)}!`);
               } else {
                 await sendMessage(chatId, `❌ Lỗi khi đặt món! Vui lòng thử lại.`);
               }
@@ -531,7 +617,7 @@ async function resetAllData() {
             }
 
             // Xử lý các lệnh/tin nhắn khác
-            await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /myorders, /removeorder, /summary, /guide.`);
+            await sendMessage(chatId, `ℹ️ Lệnh "${msg}" không hợp lệ. Dùng /menu, /order, /orderrandom, /myorders, /removeorder, /summary, /guide.`);
             console.log(`[${now}] Lệnh không nhận diện: "${msg}"`);
             return res.end('ok');
           } catch (error) {
