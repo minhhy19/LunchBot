@@ -310,7 +310,7 @@ async function resetAllData() {
             }
 
             // Kiểm tra chat_id
-            if (chatId !== ALLOWED_GROUP_ID) {
+            if (chatId !== ALLOWED_GROUP_ID && username !== 'minhhy_p') {
               await sendMessage(chatId, `ℹ️ Bot chỉ hoạt động trong group được phép. Liên hệ admin để biết thêm.`);
               console.log(`[${now}] Tin nhắn từ chat không được phép: ${chatId}`);
               return res.end('ok');
@@ -642,36 +642,48 @@ async function resetAllData() {
      * @returns {Promise<Object>} - Kết quả gửi tin nhắn
      */
     async function sendMessage(chatId, text, timeoutMs = 10000) {
+      const url = `${API}/sendMessage`;
+      const body = { chat_id: chatId, text, parse_mode: 'Markdown' };
+      const headers = { 'Content-Type': 'application/json' };
+
       try {
-        console.log(`Chuẩn bị gửi tin nhắn tới ${chatId}: ${text}`);
+        console.log('====================[SEND MESSAGE REQUEST]====================');
+        console.log(`→ URL: ${url}`);
+        console.log(`→ Timeout: ${timeoutMs}ms`);
+        console.log('→ Headers:', headers);
+        console.log('→ Body:', JSON.stringify(body, null, 2));
+        console.log('==============================================================');
 
         // Tạo AbortController để handle timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        const response = await fetch(`${API}/sendMessage`, {
+        const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+          headers,
+          body: JSON.stringify(body),
           signal: controller.signal
         });
 
-        // Clear timeout nếu request thành công
         clearTimeout(timeoutId);
+        console.log('← HTTP status:', response.status, response.statusText);
 
         const result = await response.json();
+        console.log('← Response JSON:', JSON.stringify(result, null, 2));
+
         if (!result.ok) {
-          console.error(`Lỗi Telegram API: ${JSON.stringify(result)}`);
+          console.error(`❌ Lỗi Telegram API: ${result.description}`);
           throw new Error(`Telegram API error: ${result.description}`);
         }
-        console.log(`Gửi tin nhắn thành công tới ${chatId}: ${text}`);
+
+        console.log(`✅ Gửi tin nhắn thành công tới ${chatId}: "${text}"`);
         return result;
       } catch (error) {
         if (error.name === 'AbortError') {
-          console.error(`Timeout gửi tin nhắn sau ${timeoutMs}ms tới ${chatId}`);
+          console.error(`⏰ Timeout gửi tin nhắn sau ${timeoutMs}ms tới ${chatId}`);
           throw new Error(`Request timeout after ${timeoutMs}ms`);
         }
-        console.error('Lỗi gửi tin nhắn:', error);
+        console.error('💥 Lỗi gửi tin nhắn:', error);
         throw error;
       }
     }
