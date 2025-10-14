@@ -641,14 +641,24 @@ async function resetAllData() {
      * @param {string} text - Nội dung tin nhắn
      * @returns {Promise<Object>} - Kết quả gửi tin nhắn
      */
-    async function sendMessage(chatId, text) {
+    async function sendMessage(chatId, text, timeoutMs = 10000) {
       try {
         console.log(`Chuẩn bị gửi tin nhắn tới ${chatId}: ${text}`);
+
+        // Tạo AbortController để handle timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         const response = await fetch(`${API}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+          signal: controller.signal
         });
+
+        // Clear timeout nếu request thành công
+        clearTimeout(timeoutId);
+
         const result = await response.json();
         if (!result.ok) {
           console.error(`Lỗi Telegram API: ${JSON.stringify(result)}`);
@@ -657,6 +667,10 @@ async function resetAllData() {
         console.log(`Gửi tin nhắn thành công tới ${chatId}: ${text}`);
         return result;
       } catch (error) {
+        if (error.name === 'AbortError') {
+          console.error(`Timeout gửi tin nhắn sau ${timeoutMs}ms tới ${chatId}`);
+          throw new Error(`Request timeout after ${timeoutMs}ms`);
+        }
         console.error('Lỗi gửi tin nhắn:', error);
         throw error;
       }
@@ -673,11 +687,26 @@ async function resetAllData() {
           console.warn('Chưa có RENDER_EXTERNAL_URL hoặc RENDER_EXTERNAL_HOSTNAME. Chạy local hoặc thiết lập webhook thủ công.');
           return;
         }
-        const response = await fetch(`${API}/setWebhook?url=${webhookUrl}`);
+
+        // Tạo AbortController để handle timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 giây timeout
+
+        const response = await fetch(`${API}/setWebhook?url=${webhookUrl}`, {
+          signal: controller.signal
+        });
+
+        // Clear timeout nếu request thành công
+        clearTimeout(timeoutId);
+
         const result = await response.json();
         console.log('Webhook thiết lập:', result);
       } catch (error) {
-        console.error('Lỗi thiết lập webhook:', error);
+        if (error.name === 'AbortError') {
+          console.error('Timeout khi thiết lập webhook sau 10 giây');
+        } else {
+          console.error('Lỗi thiết lập webhook:', error);
+        }
       }
     }
 
