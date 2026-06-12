@@ -40,6 +40,7 @@ const MENU_246 = [
   "Canh chua cá diêu Hồng",
   "Canh khổ qua",
   "Cá cơm rim",
+  "Mắm chưng",
   "Cơm trắng"
 ];
 
@@ -68,6 +69,7 @@ const MENU_357 = [
   "Canh chua cá diêu Hồng",
   "Canh khổ qua",
   "Cá cơm rim",
+  "Mắm chưng",
   "Cơm trắng"
 ];
 
