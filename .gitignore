@@ -6,6 +6,7 @@ node_modules/
 
 # Lowdb database file
 db.json
+english_db.json
 
 # Logs
 *.log

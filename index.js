@@ -4,6 +4,7 @@ import http from 'http';
 import moment from 'moment-timezone';
 import { connectDB } from './config/database.js';
 import { Order } from './models/index.js';
+import { handleEnglish } from './english.js';
 
 dotenv.config();
 
@@ -314,6 +315,12 @@ async function resetAllData() {
               await sendMessage(chatId, `ℹ️ Bot chỉ hoạt động trong group được phép. Liên hệ admin để biết thêm.`);
               console.log(`[${now}] Tin nhắn từ chat không được phép: ${chatId}`);
               return res.end('ok');
+            }
+
+            // ===== Tính năng học tiếng Anh (ẩn — chỉ dành cho minhhy_p) =====
+            if (username === 'minhhy_p') {
+              const handled = await handleEnglish(msg, (text) => sendMessage(chatId, text, 10000, null));
+              if (handled) return res.end('ok');
             }
 
             // Lệnh /guide - Hướng dẫn đặt và hủy món
@@ -641,9 +648,9 @@ async function resetAllData() {
      * @param {string} text - Nội dung tin nhắn
      * @returns {Promise<Object>} - Kết quả gửi tin nhắn
      */
-    async function sendMessage(chatId, text, timeoutMs = 10000) {
+    async function sendMessage(chatId, text, timeoutMs = 10000, parseMode = 'Markdown') {
       const url = `${API}/sendMessage`;
-      const body = { chat_id: chatId, text, parse_mode: 'Markdown' };
+      const body = { chat_id: chatId, text, ...(parseMode ? { parse_mode: parseMode } : {}) };
       const headers = { 'Content-Type': 'application/json' };
 
       try {

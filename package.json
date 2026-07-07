@@ -6,6 +6,7 @@
         "start": "node index.js"
     },
     "dependencies": {
+        "@google/genai": "^2.10.0",
         "dotenv": "^16.0.0",
         "lodash": "^4.17.21",
         "lowdb": "^7.0.0",
