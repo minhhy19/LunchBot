@@ -64,6 +64,38 @@ async function chat(userText) {
   return reply;
 }
 
+/**
+ * Kiểm tra tin nhắn có phải lệnh học tiếng Anh không (dùng để ack webhook sớm)
+ */
+export function isEnglishCommand(msg) {
+  return (
+    msg === '/enghelp' ||
+    msg === '/endtalk' ||
+    msg === '/eng' ||
+    msg.startsWith('/eng ') ||
+    msg.startsWith('/fix') ||
+    msg.startsWith('/word') ||
+    msg.startsWith('/translate')
+  );
+}
+
+/**
+ * Gửi trả lời, tự chia nhỏ nếu vượt giới hạn 4096 ký tự của Telegram,
+ * retry 1 lần nếu gửi lỗi (timeout mạng thoáng qua)
+ */
+async function replyChunked(reply, text) {
+  const MAX_LEN = 4000;
+  for (let i = 0; i < text.length; i += MAX_LEN) {
+    const chunk = text.slice(i, i + MAX_LEN);
+    try {
+      await reply(chunk);
+    } catch (err) {
+      console.error('Gửi tin nhắn lỗi, thử lại:', err.message);
+      await reply(chunk); // retry 1 lần
+    }
+  }
+}
+
 const HELP_TEXT = `🤫 Tính năng học tiếng Anh (ẩn):
 
 /eng <câu tiếng Anh> — trò chuyện luyện tiếng Anh (bot nhớ 20 lượt gần nhất)
@@ -99,7 +131,7 @@ export async function handleEnglish(msg, reply) {
         await reply('Cú pháp: /eng <câu tiếng Anh>\nVí dụ: /eng Hi! Let\'s talk about movies');
         return true;
       }
-      await reply(await chat(text));
+      await replyChunked(reply, await chat(text));
       return true;
     }
 
@@ -109,7 +141,7 @@ export async function handleEnglish(msg, reply) {
         await reply('Cú pháp: /fix <câu tiếng Anh cần sửa>');
         return true;
       }
-      await reply(await ask(`Sửa lỗi câu tiếng Anh sau:\n"${text}"`));
+      await replyChunked(reply, await ask(`Sửa lỗi câu tiếng Anh sau:\n"${text}"`));
       return true;
     }
 
@@ -119,7 +151,7 @@ export async function handleEnglish(msg, reply) {
         await reply('Cú pháp: /word <từ cần tra>');
         return true;
       }
-      await reply(await ask(`Giải thích từ tiếng Anh "${text}": nghĩa, phiên âm IPA, loại từ, 2 ví dụ, collocation phổ biến, từ đồng nghĩa.`));
+      await replyChunked(reply, await ask(`Giải thích từ tiếng Anh "${text}": nghĩa, phiên âm IPA, loại từ, 2 ví dụ, collocation phổ biến, từ đồng nghĩa.`));
       return true;
     }
 
@@ -129,7 +161,7 @@ export async function handleEnglish(msg, reply) {
         await reply('Cú pháp: /translate <đoạn cần dịch>');
         return true;
       }
-      await reply(await ask(`Dịch đoạn sau (Việt→Anh hoặc Anh→Việt tùy input), kèm 2-3 cách diễn đạt khác nhau (formal/informal):\n"${text}"`));
+      await replyChunked(reply, await ask(`Dịch đoạn sau (Việt→Anh hoặc Anh→Việt tùy input), kèm 2-3 cách diễn đạt khác nhau (formal/informal):\n"${text}"`));
       return true;
     }
 

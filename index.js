@@ -4,7 +4,7 @@ import http from 'http';
 import moment from 'moment-timezone';
 import { connectDB } from './config/database.js';
 import { Order } from './models/index.js';
-import { handleEnglish } from './english.js';
+import { handleEnglish, isEnglishCommand } from './english.js';
 
 dotenv.config();
 
@@ -318,9 +318,12 @@ async function resetAllData() {
             }
 
             // ===== Tính năng học tiếng Anh (ẩn — chỉ dành cho minhhy_p) =====
-            if (username === 'minhhy_p') {
-              const handled = await handleEnglish(msg, (text) => sendMessage(chatId, text, 10000, null));
-              if (handled) return res.end('ok');
+            if (username === 'minhhy_p' && isEnglishCommand(msg)) {
+              // Ack webhook NGAY để Telegram không gửi lại update trong lúc AI xử lý lâu
+              res.end('ok');
+              handleEnglish(msg, (text) => sendMessage(chatId, text, 30000, null))
+                .catch((error) => console.error('Lỗi tính năng tiếng Anh (async):', error));
+              return;
             }
 
             // Lệnh /guide - Hướng dẫn đặt và hủy món
